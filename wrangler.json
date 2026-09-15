@@ -12,5 +12,14 @@
 	],
 	"observability": {
 		"enabled": true
+	}, 
+	"previews": {
+		"d1_databases": [
+			{
+				"binding": "DB",
+				"database_id": "c6b52c26-cc57-43e9-b8bc-be41b51992b9",
+				"database_name": "d1-template-preview-db"
+			}
+		]
 	}
 }
