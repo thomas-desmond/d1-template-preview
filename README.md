@@ -1,6 +1,6 @@
 # Worker + D1 Database
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/d1-template)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/thomas-desmond/d1-template-preview)
 
 ![Worker + D1 Template Preview](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/cb7cb0a9-6102-4822-633c-b76b7bb25900/public)
 
@@ -14,7 +14,7 @@ SELECT * FROM comments LIMIT 3;
 
 The D1 database is initialized with a `comments` table and this data:
 
-```SQL
+```SQL`
 INSERT INTO comments (author, content)
 VALUES
     ('Kristian', 'Congrats!'),
