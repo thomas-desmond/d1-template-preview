@@ -1,0 +1,54 @@
+name: Preview Screenshot
+
+# Reacts to the Preview URL comment that Workers Builds (the
+# cloudflare-workers-and-pages bot) already posts on every PR. Does not
+# create any Preview itself and needs no Cloudflare credentials - it only
+# screenshots a URL that Workers Builds already deployed.
+on:
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  screenshot:
+    if: >
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login == 'cloudflare-workers-and-pages[bot]' &&
+      contains(github.event.comment.body, '### Preview URL:')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract Preview URL from bot comment
+        id: extract
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          url=$(printf '%s\n' "$COMMENT_BODY" | grep -oE '### Preview URL: https://[^ ]+' | sed -E 's/### Preview URL: //')
+          if [ -z "$url" ]; then
+            echo "Could not find a Preview URL in the comment body"
+            exit 1
+          fi
+          echo "Found Preview URL: $url"
+          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Install Playwright
+        run: npx --yes playwright install --with-deps chromium
+
+      - name: Screenshot the Preview
+        run: npx --yes playwright screenshot "${{ steps.extract.outputs.preview_url }}" preview.png
+
+      - name: Upload screenshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-screenshot
+          path: preview.png
+
+      - name: Reply on the PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "🖼️ Screenshot captured of the Preview: ${{ steps.extract.outputs.preview_url }} — see the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for the artifact."
