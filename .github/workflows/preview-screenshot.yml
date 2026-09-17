@@ -1,43 +1,59 @@
 name: Preview Screenshot
 
-# Reacts to the Preview URL comment that Workers Builds (the
-# cloudflare-workers-and-pages bot) already posts on every PR. Does not
-# create any Preview itself and needs no Cloudflare credentials - it only
-# screenshots a URL that Workers Builds already deployed.
+# Fires automatically on every PR. Does not create a Preview and needs no
+# Cloudflare credentials - Workers Builds (already connected via the Deploy
+# to Cloudflare button) does the actual build/deploy. This workflow just
+# derives the Preview URL from the branch name (Workers Builds names every
+# Preview "<branch>-<worker-name>"), waits for it to come up, and screenshots
+# it. We do this instead of relying on the cloudflare-workers-and-pages bot's
+# PR comment, which was found to be unreliable in testing (build/deploy
+# consistently succeeded but the comment did not consistently post).
 on:
-  issue_comment:
-    types: [created, edited]
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
   pull-requests: write
 
+env:
+  WORKER_NAME: d1-template-preview
+  ACCOUNT_SUBDOMAIN: thomas-development
+
 jobs:
   screenshot:
-    if: >
-      github.event.issue.pull_request != null &&
-      github.event.comment.user.login == 'cloudflare-workers-and-pages[bot]' &&
-      contains(github.event.comment.body, '### Preview URL:')
     runs-on: ubuntu-latest
     steps:
-      - name: Extract Preview URL from bot comment
-        id: extract
+      - name: Derive the expected Preview URL
+        id: derive
         env:
-          COMMENT_BODY: ${{ github.event.comment.body }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          url=$(printf '%s\n' "$COMMENT_BODY" | grep -oE '### Preview URL: https://[^ ]+' | sed -E 's/### Preview URL: //')
-          if [ -z "$url" ]; then
-            echo "Could not find a Preview URL in the comment body"
-            exit 1
-          fi
-          echo "Found Preview URL: $url"
+          slug=$(printf '%s' "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g')
+          url="https://${slug}-${WORKER_NAME}.${ACCOUNT_SUBDOMAIN}.workers.dev"
+          echo "Derived Preview URL: $url"
           echo "preview_url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the Preview to come up
+        run: |
+          url="${{ steps.derive.outputs.preview_url }}"
+          for i in $(seq 1 18); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$url" || echo "000")
+            echo "Attempt $i: $status"
+            if [ "$status" = "200" ]; then
+              echo "Preview is up."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Preview never came up at $url after 3 minutes"
+          exit 1
 
       - name: Install Playwright
         run: npx --yes playwright install --with-deps chromium
 
       - name: Screenshot the Preview
-        run: npx --yes playwright screenshot "${{ steps.extract.outputs.preview_url }}" preview.png
+        run: npx --yes playwright screenshot "${{ steps.derive.outputs.preview_url }}" preview.png
 
       - name: Upload screenshot artifact
         uses: actions/upload-artifact@v4
@@ -45,10 +61,10 @@ jobs:
           name: preview-screenshot
           path: preview.png
 
-      - name: Reply on the PR
+      - name: Comment on the PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment "${{ github.event.issue.number }}" \
+          gh pr comment "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
-            --body "🖼️ Screenshot captured of the Preview: ${{ steps.extract.outputs.preview_url }} — see the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for the artifact."
+            --body "🖼️ Screenshot captured of the Preview: ${{ steps.derive.outputs.preview_url }} — see the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for the artifact."
