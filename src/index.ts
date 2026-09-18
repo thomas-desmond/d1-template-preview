@@ -1,4 +1,5 @@
 import { renderHtml } from "./renderHtml";
+import { renderNoDatabaseHtml } from "./renderNoDatabaseHtml";
 
 type Entry = {
 	id: number;
@@ -33,10 +34,27 @@ function json(data: unknown, init: ResponseInit = {}): Response {
 
 export default {
 	async fetch(request, env) {
-		await ensureSchema(env.DB);
-
 		const url = new URL(request.url);
 		const { pathname } = url;
+
+		// A Preview only gets a `DB` binding if `wrangler.json` has a
+		// `previews.d1_databases` override for it — Cloudflare does not fall
+		// back to the production binding. Without that override, `env.DB` is
+		// `undefined` here, not an empty/unmigrated database. This is the
+		// isolation mechanic the workshop's D1-override step is about: no
+		// override, no database, not even a read-only fallback to prod.
+		if (!env.DB) {
+			if (pathname.startsWith("/api/")) {
+				return json({ error: "No D1 database bound. Add a previews.d1_databases override." });
+			}
+			// 200, not an error status: this is an expected, legitimate app
+			// state (no override configured yet), not a crash.
+			return new Response(renderNoDatabaseHtml(), {
+				headers: { "content-type": "text/html" },
+			});
+		}
+
+		await ensureSchema(env.DB);
 
 		if (pathname === "/api/entries" && request.method === "GET") {
 			return json({ entries: await listEntries(env.DB) });
