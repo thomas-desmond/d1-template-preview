@@ -1,0 +1,21 @@
+pnpm-lock.yaml
+  s_b00df3a9fb52b5::t_4f9bdc69d6d64d 1-898
+pnpm-workspace.yaml
+  s_b00df3a9fb52b5::t_ce472bcd434d87 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0ed7a4d18446250375e27c3ba0b75347597c2b1d",
+  "prompts": {},
+  "sessions": {
+    "s_b00df3a9fb52b5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f4a5df317ffemSoibIVP7Ave4K",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Thomas Desmond <24610108+thomas-desmond@users.noreply.github.com>"
+    }
+  }
+}
