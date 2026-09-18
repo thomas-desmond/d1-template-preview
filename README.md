@@ -41,3 +41,5 @@ Click the button above. It creates a repo in your own GitHub account, provisions
 1. New branch, add a `previews.d1_databases` override in `wrangler.json` pointing at a new D1 database (`npx wrangler d1 create <your-preview-db-name>`).
 2. Push, open a PR. Workers Builds deploys a Preview at `<branch>-<worker-name>.<account-subdomain>.workers.dev`.
 3. Open the Preview. The table is empty — add and delete a few entries. Compare against your production URL, which still has its seeded rows. Same code, isolated data.
+
+> Note: this PR exists to measure how long a Workers Builds Preview takes to show up on a PR. Safe to close.
