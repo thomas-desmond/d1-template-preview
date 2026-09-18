@@ -12,12 +12,14 @@
 	],
 	"observability": {
 		"enabled": true
+	},
+	"previews": {
+		"d1_databases": [
+			{
+				"binding": "DB",
+				"database_id": "4489309e-03b5-43c5-ba9e-debe5ab08e48",
+				"database_name": "workshop-walkthrough-1-db"
+			}
+		]
 	}
-	// No `previews` override block here on purpose: adding it is the
-	// workshop's hands-on exercise (new branch, new D1 database, add the
-	// override, push, open a PR). See the workshop guide for the exact
-	// steps. Earlier CI validation work briefly checked one in here to
-	// prove the mechanics end to end (github.com/thomas-desmond/
-	// d1-template-preview PR #1) — removed now that this repo is the
-	// actual starting template attendees deploy via the button.
 }
