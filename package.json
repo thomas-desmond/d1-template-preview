@@ -1,8 +1,8 @@
 {
 	"name": "d1-template-preview",
-	"description": "Cloudflare's native serverless SQL database.",
+	"description": "Add/Delete Activity Log — Worker Previews workshop demo app, backed by D1.",
 	"cloudflare": {
-		"label": "Worker + D1 Database",
+		"label": "Worker + D1 Activity Log",
 		"products": [
 			"Workers",
 			"D1"
