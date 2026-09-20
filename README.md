@@ -6,9 +6,9 @@
 
 D1 is Cloudflare's native serverless SQL database ([docs](https://developers.cloudflare.com/d1/)). This project is the demo app for the Worker Previews workshop: a Worker with a D1 binding, and a small client-rendered UI to **add** and **delete** entries in an activity log — real writes, real deletes, not just a read-only query.
 
-The production D1 database is seeded with a few entries via migration. A Preview created via the `previews` override in `wrangler.json` starts with an **empty** table instead — see the comments in `migrations/0001_create_activity_log.sql` for why, and `src/index.ts` for the self-healing schema creation that makes it safe.
+The production D1 database is created and seeded through `migrations/`. The workshop's candidate Preview schema lives separately at `workshop/preview-schema.sql`, so production deployment automation cannot apply it.
 
-Add an entry, delete an entry, then compare your Preview against production — same code, different data, because the database is isolated per Preview.
+The candidate schema deliberately exposes an incompatible delete query. Add and refresh work, delete fails visibly, and Preview Observability captures the D1 error for an agent to diagnose. The repair uses SQLite's `rowid`, making the merged Worker compatible with both the unchanged production schema and the candidate Preview schema.
 
 <!-- dash-content-end -->
 
@@ -38,8 +38,16 @@ Click the button above. It creates a repo in your own GitHub account, provisions
 
 ## Workshop flow: creating your own Preview
 
-1. New branch, add a `previews.d1_databases` override in `wrangler.json` pointing at a new D1 database (`npx wrangler d1 create <your-preview-db-name>`).
-2. Push, open a PR. Workers Builds deploys a Preview at `<branch>-<worker-name>.<account-subdomain>.workers.dev`.
-3. Open the Preview. The table is empty — add and delete a few entries. Compare against your production URL, which still has its seeded rows. Same code, isolated data.
+1. Create a branch and a new database with `npx wrangler d1 create workshop-preview-db`.
+2. Add `previews.d1_databases` and `previews.observability` configuration without changing the top-level production settings.
+3. Push and open a PR. Workers Builds runs `npx wrangler preview` and posts the Preview URL.
+4. Open the Preview. It renders setup instructions because the bound database has no schema.
+5. Apply the workshop fixture by database name:
+   ```bash
+   npx wrangler d1 execute workshop-preview-db --remote --file workshop/preview-schema.sql
+   ```
+6. Refresh and confirm the Preview-specific rows load. Add and refresh work; delete produces a visible error and a structured Observability log.
+7. Repair deletion without changing either schema. The merged query must work against production's `id` and the Preview's `activity_id`.
+8. Push, retest the updated Preview, then merge. Production receives compatible Worker code and never receives the workshop SQL.
 
-> Note: this PR exists to measure how long a Workers Builds Preview takes to show up on a PR. Safe to close.
+The merged `previews` binding intentionally remains on `main`. `workshop-preview-db` becomes a shared database for this Worker's future Previews: isolated from production, but shared between those Previews.

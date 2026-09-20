@@ -15,6 +15,8 @@ export function renderHtml() {
           .entry-form { display: flex; gap: 0.5rem; margin: 1rem 0; }
           .entry-form input { flex: 1; padding: 0.5rem; }
           .entry-empty { opacity: 0.6; font-style: italic; }
+          .entry-error { display: none; margin: 1rem 0; padding: 0.75rem; border: 1px solid #dc2626; border-radius: 0.35rem; color: #991b1b; background: #fef2f2; }
+          .entry-error[data-visible="true"] { display: block; }
         </style>
       </head>
 
@@ -32,6 +34,8 @@ export function renderHtml() {
             <button type="submit">Add entry</button>
           </form>
 
+          <p id="entry-error" class="entry-error" role="alert" data-visible="false"></p>
+
           <ul id="entry-list" style="list-style: none; padding: 0; margin: 0;"></ul>
 
           <small class="blue" style="display: block; margin-top: 1.5rem;">
@@ -43,6 +47,21 @@ export function renderHtml() {
           const listEl = document.getElementById("entry-list");
           const formEl = document.getElementById("entry-form");
           const inputEl = document.getElementById("entry-text");
+          const errorEl = document.getElementById("entry-error");
+
+          function clearError() {
+            errorEl.textContent = "";
+            errorEl.dataset.visible = "false";
+          }
+
+          function showError(message) {
+            errorEl.textContent = message;
+            errorEl.dataset.visible = "true";
+          }
+
+          async function readJson(res) {
+            return res.json().catch(() => ({}));
+          }
 
           function renderEntries(entries) {
             listEl.innerHTML = "";
@@ -82,26 +101,43 @@ export function renderHtml() {
 
           async function loadEntries() {
             const res = await fetch("/api/entries");
-            const data = await res.json();
+            const data = await readJson(res);
+            if (!res.ok) {
+              showError(data.error || "Could not load entries.");
+              return;
+            }
+            clearError();
             renderEntries(data.entries);
           }
 
           async function deleteEntry(id) {
-            await fetch("/api/entries/" + id, { method: "DELETE" });
-            loadEntries();
+            clearError();
+            const res = await fetch("/api/entries/" + id, { method: "DELETE" });
+            const data = await readJson(res);
+            if (!res.ok) {
+              showError(data.error || "Delete failed. Your data is unchanged.");
+              return;
+            }
+            renderEntries(data.entries);
           }
 
           formEl.addEventListener("submit", async (event) => {
             event.preventDefault();
             const text = inputEl.value.trim();
             if (!text) return;
-            await fetch("/api/entries", {
+            clearError();
+            const res = await fetch("/api/entries", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ text }),
             });
+            const data = await readJson(res);
+            if (!res.ok) {
+              showError(data.error || "Could not add the entry.");
+              return;
+            }
             inputEl.value = "";
-            loadEntries();
+            renderEntries(data.entries);
           });
 
           loadEntries();

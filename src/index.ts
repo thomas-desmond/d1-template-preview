@@ -7,20 +7,16 @@ type Entry = {
 	created_at: string;
 };
 
-// Schema-only, idempotent. No seed rows — see the comment in
-// migrations/0001_create_activity_log.sql for why this also runs at request
-// time: a freshly-created Preview D1 database never receives the migration
-// (Workers Builds' predeploy hook can't reach it), so the table needs to
-// exist by the time the first request comes in.
-async function ensureSchema(db: D1Database): Promise<void> {
-	await db.exec(
-		"CREATE TABLE IF NOT EXISTS activity_log (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
-	);
+async function hasSchema(db: D1Database): Promise<boolean> {
+	const table = await db
+		.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'activity_log'")
+		.first<{ name: string }>();
+	return table !== null;
 }
 
 async function listEntries(db: D1Database): Promise<Entry[]> {
 	const { results } = await db
-		.prepare("SELECT id, text, created_at FROM activity_log ORDER BY id DESC LIMIT 50")
+		.prepare("SELECT rowid AS id, text, created_at FROM activity_log ORDER BY rowid DESC LIMIT 50")
 		.all<Entry>();
 	return results;
 }
@@ -45,16 +41,29 @@ export default {
 		// override, no database, not even a read-only fallback to prod.
 		if (!env.DB) {
 			if (pathname.startsWith("/api/")) {
-				return json({ error: "No D1 database bound. Add a previews.d1_databases override." });
+				return json(
+					{ error: "No D1 database bound. Add a previews.d1_databases override." },
+					{ status: 503 },
+				);
 			}
 			// 200, not an error status: this is an expected, legitimate app
 			// state (no override configured yet), not a crash.
-			return new Response(renderNoDatabaseHtml(), {
+			return new Response(renderNoDatabaseHtml("missing-binding"), {
 				headers: { "content-type": "text/html" },
 			});
 		}
 
-		await ensureSchema(env.DB);
+		if (!(await hasSchema(env.DB))) {
+			if (pathname.startsWith("/api/")) {
+				return json(
+					{ error: "The Preview database is connected, but its schema has not been applied." },
+					{ status: 409 },
+				);
+			}
+			return new Response(renderNoDatabaseHtml("missing-schema"), {
+				headers: { "content-type": "text/html" },
+			});
+		}
 
 		if (pathname === "/api/entries" && request.method === "GET") {
 			return json({ entries: await listEntries(env.DB) });
@@ -75,8 +84,22 @@ export default {
 		const deleteMatch = pathname.match(/^\/api\/entries\/(\d+)$/);
 		if (deleteMatch && request.method === "DELETE") {
 			const id = Number(deleteMatch[1]);
-			await env.DB.prepare("DELETE FROM activity_log WHERE id = ?").bind(id).run();
-			return json({ entries: await listEntries(env.DB) });
+			try {
+				// Intentionally incompatible with workshop/preview-schema.sql. The
+				// workshop repair uses `rowid`, which works with both schemas.
+				await env.DB.prepare("DELETE FROM activity_log WHERE id = ?").bind(id).run();
+				return json({ entries: await listEntries(env.DB) });
+			} catch (error) {
+				console.error({
+					event: "activity_log.delete_failed",
+					entryId: id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+				return json(
+					{ error: "Delete failed. Your data is unchanged. Check this Preview's Observability logs." },
+					{ status: 500 },
+				);
+			}
 		}
 
 		if (pathname === "/" && request.method === "GET") {
